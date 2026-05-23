@@ -1,0 +1,96 @@
+{
+  "date": "2026-05-23",
+  "project": "example-payment-service",
+  "pci_dss_version": "4.0.1",
+  "entity_type": "merchant",
+  "level": 2,
+  "validation_method": "SAQ-D + quarterly ASV scan + annual pentest",
+  "sp_only_checks_applied": false,
+  "scope": ["code", "network", "data", "logs"],
+  "summary": {
+    "critical": 2,
+    "high": 2,
+    "medium": 1,
+    "low": 1
+  },
+  "findings": [
+    {
+      "id": "PCI-001",
+      "area": "code",
+      "requirement": "3.3.1.2",
+      "severity": "critical",
+      "title": "CVV is persisted to the database after authorization",
+      "file": "src/payments/store.ts",
+      "line": 42,
+      "snippet": "await db.cards.insert({ pan, cvv, expiry });",
+      "why": "PCI DSS 3.3.1.2 categorically prohibits storing the card verification code (CVV/CVC/CAV2/CID) after payment authorization — even encrypted, and even in logs.",
+      "fix": "Drop the cvv field from the INSERT. CVV is used only in the request to the payment gateway within a single transaction and is never persisted. If tokenization is needed, use a PCI-compliant vault (e.g. Stripe, Braintree).",
+      "level1_note": null
+    },
+    {
+      "id": "PCI-002",
+      "area": "code",
+      "requirement": "3.5.1",
+      "severity": "critical",
+      "title": "PAN is stored in plaintext in the database",
+      "file": "src/payments/store.ts",
+      "line": 43,
+      "snippet": "await db.cards.insert({ pan, cvv, expiry });",
+      "why": "PCI DSS 3.5.1 requires PAN to be unreadable anywhere it is stored: strong-crypto encryption (AES-256), truncation, or a keyed cryptographic hash (HMAC-SHA256). Plaintext storage is a direct violation.",
+      "fix": "Store only the last 4 digits (truncation) if the full PAN is not needed. If it is needed, encrypt with AES-256-GCM using a key from a KMS (AWS KMS, HashiCorp Vault). The key must not sit next to the data.",
+      "level1_note": null
+    },
+    {
+      "id": "PCI-003",
+      "area": "network",
+      "requirement": "1.4.4",
+      "severity": "high",
+      "title": "The PostgreSQL port is published directly to the internet",
+      "file": "docker-compose.yml",
+      "line": 18,
+      "snippet": "  db:\n    image: postgres:16\n    ports:\n      - \"5432:5432\"",
+      "why": "PCI DSS 1.4.4 prohibits direct access from public networks to components that store cardholder data. Publishing port 5432 on the host allows the database to be attacked directly from the internet.",
+      "fix": "Remove the `ports:` section from the db service. Keep `expose: [\"5432\"]` so it is reachable only inside the docker network. If external access is needed for administration, allow it only via VPN + jump host.",
+      "level1_note": null
+    },
+    {
+      "id": "PCI-004",
+      "area": "data",
+      "requirement": "7.2.2",
+      "severity": "high",
+      "title": "The application connects to the database as a superuser",
+      "file": ".env.example",
+      "line": 5,
+      "snippet": "DATABASE_URL=postgres://postgres:postgres@db:5432/app",
+      "why": "PCI DSS 7.2.2 requires the principle of least privilege. The postgres role is a superuser with rights to drop tables, alter the schema, and reach every database. Compromising the application grants full access to the data.",
+      "fix": "Create a least-privilege role:\n```sql\nCREATE ROLE app_user WITH LOGIN PASSWORD 'strong_password';\nGRANT SELECT, INSERT, UPDATE ON cards, payments TO app_user;\n```\nUse `postgres://app_user:...@db:5432/app` in DATABASE_URL. Also fix the vendor default password `postgres:postgres` (Req 2.2.2).",
+      "level1_note": null
+    },
+    {
+      "id": "PCI-005",
+      "area": "logs",
+      "requirement": "3.4.1",
+      "severity": "medium",
+      "title": "The full PAN reaches the logs",
+      "file": "src/payments/controller.ts",
+      "line": 87,
+      "snippet": "logger.info('processing payment', { pan: req.body.pan });",
+      "why": "PCI DSS 3.4.1 requires PAN to be masked wherever it is displayed: only the BIN (first 6) and the last 4 digits may be visible. Logs are a place of display, so the rule applies to them as well.",
+      "fix": "Add a masking helper:\n```ts\nconst maskPan = (pan: string) => pan.slice(0,6) + '******' + pan.slice(-4);\nlogger.info('processing payment', { pan: maskPan(req.body.pan) });\n```\nSweep the whole payment path: `grep -r 'logger\\|console\\.log' src/payments/`",
+      "level1_note": null
+    },
+    {
+      "id": "PCI-006",
+      "area": "logs",
+      "requirement": "10.5.1",
+      "severity": "low",
+      "title": "No log retention policy is configured",
+      "file": "docker-compose.yml",
+      "line": null,
+      "snippet": "# logging section absent in docker-compose.yml",
+      "why": "PCI DSS 10.5.1 requires audit logs to be retained for at least 12 months, of which at least 3 months must be immediately available for analysis. With the default configuration, docker containers are not set up for long-term log retention.",
+      "fix": "Add centralized logging (ELK, Loki, CloudWatch) with a retention policy of ≥12 months. In docker-compose:\n```yaml\nlogging:\n  driver: \"json-file\"\n  options:\n    max-size: \"100m\"\n    max-file: \"10\"\n```\nFor production, ship logs (Filebeat/Fluentd) into a centralized SIEM.",
+      "level1_note": null
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PCI DSS Audit Report",
+  "type": "object",
+  "required": ["date", "entity_type", "level", "scope", "summary", "findings"],
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Audit date in YYYY-MM-DD format"
+    },
+    "project": {
+      "type": "string",
+      "description": "Project name/path"
+    },
+    "pci_dss_version": {
+      "type": "string",
+      "description": "Version of the standard, e.g. '4.0.1'",
+      "default": "4.0.1"
+    },
+    "entity_type": {
+      "type": "string",
+      "enum": ["merchant", "provider", "issuer"],
+      "description": "Entity type: merchant / provider (service provider) / issuer"
+    },
+    "level": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4,
+      "description": "PCI DSS level. Merchant: 1-4. Provider: 1-2. Issuer: 1."
+    },
+    "validation_method": {
+      "type": "string",
+      "description": "Validation method for this type and level, e.g. 'SAQ-D + quarterly ASV scan' or 'ROC (QSA) + quarterly ASV scan + annual pentest'"
+    },
+    "sp_only_checks_applied": {
+      "type": "boolean",
+      "description": "true if the SP-only checklist was applied (for provider)"
+    },
+    "scope": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["code", "network", "data", "logs"]
+      },
+      "description": "Which audit areas were covered"
+    },
+    "summary": {
+      "type": "object",
+      "required": ["critical", "high", "medium", "low"],
+      "properties": {
+        "critical": { "type": "integer", "minimum": 0 },
+        "high":     { "type": "integer", "minimum": 0 },
+        "medium":   { "type": "integer", "minimum": 0 },
+        "low":      { "type": "integer", "minimum": 0 }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "area", "requirement", "severity", "title", "why", "fix"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique finding identifier, e.g. PCI-001"
+          },
+          "area": {
+            "type": "string",
+            "enum": ["code", "network", "data", "logs"]
+          },
+          "requirement": {
+            "type": "string",
+            "description": "PCI DSS requirement number, e.g. '3.4', '8.2', '10.2.1'"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"]
+          },
+          "title": { "type": "string" },
+          "file": { "type": "string", "description": "Relative path to the file" },
+          "line": { "type": ["integer", "null"], "minimum": 1 },
+          "snippet": {
+            "type": "string",
+            "description": "Code/config snippet, verbatim"
+          },
+          "why": {
+            "type": "string",
+            "description": "Why this is not PCI DSS compliant"
+          },
+          "fix": {
+            "type": "string",
+            "description": "Remediation option"
+          },
+          "applies_to": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["merchant", "provider", "issuer", "all"]
+            },
+            "description": "Entity types this finding applies to. 'all' = every type."
+          },
+          "level1_note": {
+            "type": ["string", "null"],
+            "description": "For Level 1: what must be documented for the QSA (evidence type). null if not Level 1."
+          }
+        }
+      }
+    }
+  }
+}

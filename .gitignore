@@ -1,0 +1,9 @@
+# Claude Code user data — do not commit
+.claude/
+
+# Local PDF copies of the standard
+references/*.pdf
+
+# OS
+.DS_Store
+Thumbs.db
